@@ -8,8 +8,10 @@ nameOverride: ""
 fullnameOverride: ""
 
 processInputs:
-  YAML_FILE_PATH: "/path/to/your/config.yaml"
+  zip_url: "zip_url"
 
+resolutionInput:
+  resolution: "resolution string"
 s3:
   # Specifies whether a config map should be created
   enabled: true

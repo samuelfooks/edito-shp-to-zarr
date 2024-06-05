@@ -199,6 +199,18 @@
           "default": "https://s3.waw3-1.cloudferro.com/emodnet/emodnet_native/archive/human_activities_windfarms/EMODnet_HA_Energy_WindFarms_polygons_20231124.zip"
         }
       }
+    },
+    "resolutionInput": {
+      "description": "Chosen resolution",
+      "type": "object",
+      "properties": {
+        "resolution": {
+          "type": "string",
+          "title": "Resolution of Output Raster",
+          "description": "Defines the resolution of the output raster in degrees. Default value is 0.01, which corresponds to approximately 10 km.",
+          "default": "0.01"
+        }
+      }
     }
   }
 }

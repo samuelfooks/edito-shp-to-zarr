@@ -9,11 +9,12 @@ spec:
     spec:
       initContainers:
       - name: {{ .Release.Name }}-main-container
-        image: samfooks/edito-shp2zarr:latest
+        image: samfooks/shptozarr:latest
         env:
-        - name: zip_url
+        - name: ZIP_URL
           value: "{{ .Values.processInputs.zip_url }}"
-
+        - name: RESOLUTION
+          value: "{{ .Values.resolutionInput.resolution }}"
         - name: EDITO_INFRA_OUTPUT
           value: "/output-data"
         - name: USER_NAME
@@ -22,7 +23,7 @@ spec:
         volumeMounts:
         - mountPath: /output-data
           name: temp-volume
-        command: ["python", "shp_to_zarr.py", "$(zip_url)"]
+        command: ["python", "shp_to_zarr.py", "$(ZIP_URL)", "$(RESOLUTION)"]
         resources:
             {{- toYaml .Values.resources | nindent 12 }}
 

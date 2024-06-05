@@ -9,6 +9,7 @@ import pandas as pd
 import stat
 import os
 import sys
+from datetime import datetime, date
 import requests
 from zipfile import ZipFile
 from tempfile import TemporaryDirectory
@@ -36,9 +37,11 @@ def download_and_extract_zip(zip_url):
     return shp_file_path
     
     
-def gdf2zarrconverter(shp_file_path, resolution=0.01):
+def gdf2zarrconverter(shp_file_path, arco_asset_temp_dir, resolution, zip_url):
 
+    resolution = float(resolution)
     title = os.path.splitext(os.path.basename(shp_file_path))[0]
+    file = os.path.basename(shp_file_path)
     def cleaner(data):
         if data == '0' or data == ' ' or data == np.nan or data == 'nan':
             data = 'None'
@@ -70,13 +73,10 @@ def gdf2zarrconverter(shp_file_path, resolution=0.01):
         return encoded_data, category_mapping
     
     gdf = gpd.read_file(shp_file_path)
-
-
+    if gdf.crs != 'EPSG:4326':
+        gdf = gdf.to_crs('EPSG:4326')
     # Find the latitude and longitude bounds
     lon_min, lat_min, lon_max, lat_max = gdf.total_bounds
-
-    # Calculate width and height based on resolution in EPSG 4326 degrees
-    resolution = 0.01 #about 10 km
 
     width = int(np.ceil((lon_max - lon_min) / resolution))
     height = int(np.ceil((lat_max - lat_min) / resolution))
@@ -145,11 +145,10 @@ def gdf2zarrconverter(shp_file_path, resolution=0.01):
         
 
     # Create an Xarray Dataset to include the raster layers and the category mappings as separate variables
-    dataset = xr.Dataset(coords={'latitude':  np.round(np.linspace(lat_min, lat_max, height, dtype=float), decimals=4),
-                            'longitude': np.round(np.linspace(lon_min, lon_max, width, dtype=float), decimals=4)})
+    dataset = xr.Dataset(coords={'latitude':  np.round(np.linspace(lat_max, lat_min, height, dtype=float), decimals=4),
+                                    'longitude': np.round(np.linspace(lon_min, lon_max, width, dtype=float), decimals=4)})
 
-    #set latitude coordinates in increasing order
-    dataset = dataset.reindex(latitude=dataset.latitude[::-1])
+    
 
     #add latitude and longitude to the categorical layers
     for column, raster in categorical_raster_layers.items():
@@ -162,8 +161,15 @@ def gdf2zarrconverter(shp_file_path, resolution=0.01):
     #add latitude and longitude for the numerical layers
     for column, raster in numerical_raster_layers.items():
         dataset[column] = (['latitude', 'longitude'], raster)
-        
+    
+    encoding_dictionary = {}
+    if category_mapping:
+        for column in categorical_columns:
+            encoding_dictionary[column] = category_mappings[column]
+    
+    dataset.attrs['categorical_encoding'] = encoding_dictionary
 
+    dataset = dataset.sortby('latitude')
     dataset.latitude.attrs['standard_name'] = 'latitude'
     dataset.latitude.attrs['units'] = 'degrees_north'
     dataset.longitude.attrs['standard_name'] = 'longitude'
@@ -173,7 +179,6 @@ def gdf2zarrconverter(shp_file_path, resolution=0.01):
     dataset.attrs['proj:epsg'] = str(gdf.crs)
     dataset.attrs['bounding_box'] = str(gdf.total_bounds)
     dataset.attrs['resolution'] = resolution
-
     latitudeattrs = {'_CoordinateAxisType': 'Lat', 
                         'axis': 'Y', 
                         'long_name': 'latitude', 
@@ -192,11 +197,10 @@ def gdf2zarrconverter(shp_file_path, resolution=0.01):
                     'step': (dataset.longitude.values.max() - dataset.longitude.values.min()) / dataset.longitude.values.shape[0], 
                     'units': 'degrees_east'
     }
+    dataset.attrs['Comment'] = f'This zarr dataset was created by rasterizing a geodataframe from {file} from {zip_url} on {datetime.today()}.'
     dataset.latitude.attrs = latitudeattrs
     dataset.longitude.attrs = longitudeattrs
-    dataset.attrs['epsg : proj'] = 4326
-    dataset.attrs['resolution'] = resolution
-   
+    
     zarr_path = f"{arco_asset_temp_dir}/{title}_res{resolution}.zarr"
     dataset.to_zarr(zarr_path, mode = 'w')
     print(f'{title} zarr made at {zarr_path}')
@@ -204,13 +208,13 @@ def gdf2zarrconverter(shp_file_path, resolution=0.01):
     return zarr_path
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python shp_to_zarr.py <URL>")
-        sys.exit(1)
+    # if len(sys.argv) != 3:
+    #     print("Usage: python shp_to_zarr.py <URL> <resolution>")
+    #     sys.exit(1)
     
     zip_url = sys.argv[1]
     arco_asset_temp_dir = os.environ.get('ARCO_ASSET_TEMP_DIR')
-    
+    resolution = sys.argv[2]
     # Download and extract the zip file, then get the path to the .shp file
     shp_file_path = download_and_extract_zip(zip_url)
     
@@ -219,7 +223,7 @@ if __name__ == "__main__":
     print("File Permissions:", permissions)
     # Convert the .shp file to zarr using gdf2zarrconverter function
     if shp_file_path:
-        zarr_path = gdf2zarrconverter(shp_file_path, arco_asset_temp_dir)
+        zarr_path = gdf2zarrconverter(shp_file_path, arco_asset_temp_dir, resolution, zip_url)
         print(f"Zarr file created: {zarr_path}")
     else:
         print("No .shp file found in the downloaded zip file.")

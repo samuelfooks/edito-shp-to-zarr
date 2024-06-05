@@ -27,4 +27,5 @@ EXPOSE 80
 ENV ARCO_ASSET_TEMP_DIR /output-data
 
 # Run shp_to_zarr.py when the container launches
+# CMD read -p 'Enter Input URL: ' url; read -p 'Enter Resolution: ' res; python shp_to_zarr.py $url $res
 CMD ["python", "shp_to_zarr.py"]
